@@ -1,4 +1,4 @@
-Golang 2026 Discord Nuker - Pcf Nuker v1
+Golang 2026 Discord Nuker - Pcf Nuker v1 | Old Name: Atm Nuker
 
 Features: 
 Mass Ban
