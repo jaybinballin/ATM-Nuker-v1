@@ -40,15 +40,13 @@ type WebhookConfig struct {
 }
 
 func main() {
-	fmt.Println("[$] ATM NUKER v1")
-	
-	token := os.Getenv("TOKEN")
-	if token == "" {
-		fmt.Println("[!] TOKEN environment variable not set.")
-		return
-	}
+	fmt.Println("[$] PCF NUKER v1")
 
 	reader := bufio.NewReader(os.Stdin)
+	
+	fmt.Print("[$] Bot Token: ")
+	token, _ := reader.ReadString('\n')
+	token = strings.TrimSpace(token)
 
 	fmt.Print("[$] Guild ID: ")
 	guild, _ := reader.ReadString('\n')
@@ -712,6 +710,9 @@ func SendWebhookMessage(webhookURL string, config WebhookConfig) {
 	payload := map[string]string{"content": config.Message}
 	if config.Username != "" {
 		payload["username"] = config.Username
+	}
+	if config.AvatarURL != "" {
+		payload["avatar_url"] = config.AvatarURL
 	}
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
